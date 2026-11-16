@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% block title %}Faturamento - Joanderson Moto Peças{% endblock %}
+{% block content %}
+<h1>Faturamento</h1>
+
+
+<div class="cards">
+    <div class="card">
+        <h3>Hoje</h3>
+        <p id="fat-hoje" class="card-value">R$ 0,00</p>
+        <span id="os-hoje" class="card-sub">0 OS</span>
+    </div>
+    <div class="card">
+        <h3>Este mês</h3>
+        <p id="fat-mes" class="card-value">R$ 0,00</p>
+        <span id="os-mes" class="card-sub">0 OS</span>
+    </div>
+    <div class="card">
+        <h3>Total geral</h3>
+        <p id="fat-total" class="card-value">R$ 0,00</p>
+        <span id="os-total" class="card-sub">0 OS</span>
+    </div>
+</div>
+
+<h2>Faturamento por mês</h2>
+<table class="tabela">
+    <thead>
+        <tr>
+            <th>Mês</th>
+            <th>Quantidade de OS</th>
+            <th>Faturamento</th>
+        </tr>
+    </thead>
+    <tbody id="lista-meses"></tbody>
+</table>
+{% endblock %}
+
+{% block scripts %}
+<script>
+async function carregarFaturamento() {
+    const r = await fetch('/api/faturamento');
+    const d = await r.json();
+    document.getElementById('fat-hoje').textContent = formatarMoeda(d.faturamento_hoje);
+    document.getElementById('fat-mes').textContent = formatarMoeda(d.faturamento_mes);
+    document.getElementById('fat-total').textContent = formatarMoeda(d.faturamento_total);
+    document.getElementById('os-hoje').textContent = `${d.quantidade_os_hoje} OS`;
+    document.getElementById('os-mes').textContent = `${d.quantidade_os_mes} OS`;
+    document.getElementById('os-total').textContent = `${d.quantidade_os_total} OS`;
+}
+
+async function carregarPorMes() {
+    const r = await fetch('/api/faturamento/por-mes');
+    const dados = await r.json();
+    const tbody = document.getElementById('lista-meses');
+    tbody.innerHTML = '';
+    if (dados.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="3">Sem dados ainda.</td></tr>';
+        return;
+    }
+    dados.slice().reverse().forEach(d => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${formatarMes(d.mes)}</td>
+            <td>${d.quantidade}</td>
+            <td>${formatarMoeda(d.total)}</td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function formatarMes(mesStr) {
+    const [ano, mes] = mesStr.split('-');
+    const nomes = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+    return `${nomes[parseInt(mes) - 1]}/${ano}`;
+}
+
+carregarFaturamento();
+carregarPorMes();
+
+// atualiza automaticamente a cada 30 segundos
+setInterval(() => {
+    carregarFaturamento();
+    carregarPorMes();
+}, 30000);
+</script>
+{% endblock %}

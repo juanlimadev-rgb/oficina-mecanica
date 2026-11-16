@@ -1,0 +1,156 @@
+{% extends "base.html" %}
+{% block title %}Clientes - Joanderson Moto Peças{% endblock %}
+{% block content %}
+<h1>Clientes</h1>
+
+<details class="formulario" open>
+    <summary>Cadastrar novo cliente</summary>
+    <form id="form-cliente">
+        <input type="hidden" id="cliente-id">
+        <label>Nome *
+            <input type="text" id="nome" required>
+        </label>
+        <label>Telefone
+            <input type="text" id="telefone" placeholder="(79) 99999-9999">
+        </label>
+        <label>Endereço
+            <input type="text" id="endereco" placeholder="Rua, número, bairro">
+        </label>
+        <label>Moto (modelo)
+            <input type="text" id="moto" placeholder="Ex: Honda CG 160 Start">
+        </label>
+        <label>Placa
+            <input type="text" id="placa" placeholder="ABC-1234">
+        </label>
+        <label>Observações
+            <textarea id="observacoes" rows="2"></textarea>
+        </label>
+        <div class="form-actions">
+            <button type="submit" class="btn">Salvar</button>
+            <button type="button" class="btn btn-secondary" onclick="limparFormulario()">Limpar</button>
+        </div>
+    </form>
+</details>
+
+<div class="busca">
+    <input type="text" id="busca-cliente" placeholder="Buscar por nome, placa ou telefone...">
+</div>
+
+<table class="tabela">
+    <thead>
+        <tr>
+            <th>Nome</th>
+            <th>Telefone</th>
+            <th>Moto</th>
+            <th>Placa</th>
+            <th>Ações</th>
+        </tr>
+    </thead>
+    <tbody id="lista-clientes"></tbody>
+</table>
+{% endblock %}
+
+{% block scripts %}
+<script>
+let clientes = [];
+
+async function carregarClientes(busca = '') {
+    const url = busca ? `/api/clientes?busca=${encodeURIComponent(busca)}` : '/api/clientes';
+    const r = await fetch(url);
+    clientes = await r.json();
+    renderizarClientes();
+}
+
+function renderizarClientes() {
+    const tbody = document.getElementById('lista-clientes');
+    tbody.innerHTML = '';
+    clientes.forEach(c => {
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+            <td>${escapeHtml(c.nome)}</td>
+            <td>${escapeHtml(c.telefone || '-')}</td>
+            <td>${escapeHtml(c.moto || '-')}</td>
+            <td>${escapeHtml(c.placa || '-')}</td>
+            <td class="acoes">
+                <button class="btn-sm" onclick="editarCliente(${c.id})">Editar</button>
+                <a class="btn-sm" href="/historico?cliente_id=${c.id}">Histórico</a>
+                <button class="btn-sm btn-danger" onclick="removerCliente(${c.id})">Excluir</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function editarCliente(id) {
+    const c = clientes.find(c => c.id === id);
+    if (!c) return;
+    document.getElementById('cliente-id').value = c.id;
+    document.getElementById('nome').value = c.nome || '';
+    document.getElementById('telefone').value = c.telefone || '';
+    document.getElementById('endereco').value = c.endereco || '';
+    document.getElementById('moto').value = c.moto || '';
+    document.getElementById('placa').value = c.placa || '';
+    document.getElementById('observacoes').value = c.observacoes || '';
+    document.querySelector('details.formulario').open = true;
+    window.scrollTo({top: 0, behavior: 'smooth'});
+}
+
+function limparFormulario() {
+    document.getElementById('form-cliente').reset();
+    document.getElementById('cliente-id').value = '';
+}
+
+async function removerCliente(id) {
+    if (!confirm('Tem certeza que deseja excluir este cliente? Isso também removerá suas ordens de serviço.')) return;
+    await fetch(`/api/clientes/${id}`, { method: 'DELETE' });
+    carregarClientes();
+}
+
+document.getElementById('form-cliente').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const id = document.getElementById('cliente-id').value;
+    const dados = {
+        nome: document.getElementById('nome').value,
+        telefone: document.getElementById('telefone').value,
+        endereco: document.getElementById('endereco').value,
+        moto: document.getElementById('moto').value,
+        placa: document.getElementById('placa').value,
+        observacoes: document.getElementById('observacoes').value,
+    };
+
+let resposta;
+
+    if (id) {
+        resposta = await fetch(`/api/clientes/${id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dados)
+        });
+    } else {
+        resposta = await fetch('/api/clientes', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(dados)
+        });
+    }
+
+    const retorno = await resposta.json();
+
+    if (!resposta.ok) {
+        alert(retorno.erro || "Erro ao salvar cliente.");
+        return;
+    }
+
+    alert("Cliente salvo com sucesso!");
+
+    limparFormulario();
+    carregarClientes();
+});
+
+document.getElementById('busca-cliente').addEventListener('input', (e) => {
+    carregarClientes(e.target.value);
+});
+
+carregarClientes();
+</script>
+{% endblock %}

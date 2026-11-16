@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Início - Joanderson Moto Peças{% endblock %}
+{% block content %}
+<h1>Bem-vindo</h1>
+<p>Sistema de gestão da oficina: cadastro de clientes, ordens de serviço, geração de PDF e controle de faturamento.</p>
+
+<div class="cards">
+    <div class="card">
+        <h3>Faturamento hoje</h3>
+        <p id="fat-hoje" class="card-value">R$ 0,00</p>
+    </div>
+    <div class="card">
+        <h3>Faturamento do mês</h3>
+        <p id="fat-mes" class="card-value">R$ 0,00</p>
+    </div>
+    <div class="card">
+        <h3>OS realizadas hoje</h3>
+        <p id="os-hoje" class="card-value">0</p>
+    </div>
+    <div class="card">
+        <h3>OS realizadas no mês</h3>
+        <p id="os-mes" class="card-value">0</p>
+    </div>
+</div>
+
+<div class="actions">
+    <a href="/clientes" class="btn">Cadastrar / Consultar Clientes</a>
+    <a href="/nova-os" class="btn">Nova Ordem de Serviço</a>
+    <a href="/historico" class="btn">Ver Histórico</a>
+    <a href="/dashboard" class="btn">Ver Faturamento Completo</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    async function carregarResumo() {
+        const r = await fetch('/api/faturamento');
+        const d = await r.json();
+        document.getElementById('fat-hoje').textContent = formatarMoeda(d.faturamento_hoje);
+        document.getElementById('fat-mes').textContent = formatarMoeda(d.faturamento_mes);
+        document.getElementById('os-hoje').textContent = d.quantidade_os_hoje;
+        document.getElementById('os-mes').textContent = d.quantidade_os_mes;
+    }
+    carregarResumo();
+</script>
+{% endblock %}

@@ -1,0 +1,174 @@
+{% extends "base.html" %}
+{% block title %}Editar OS - Joanderson Moto Peças{% endblock %}
+{% block content %}
+<h1>Editar Ordem de Serviço #{{ ordem_id }}</h1>
+
+<form id="form-os">
+    <p id="info-cliente" style="font-weight: bold; margin-bottom: 15px;"></p>
+
+    <label>Descrição geral do serviço
+        <textarea id="descricao" rows="2" placeholder="Ex: Troca de óleo e revisão geral"></textarea>
+    </label>
+
+    <label>Status
+        <select id="status">
+            <option value="finalizada">Finalizada (entra no faturamento)</option>
+            <option value="pendente">Pendente</option>
+            <option value="cancelada">Cancelada</option>
+        </select>
+    </label>
+
+    <label>Forma de pagamento
+        <select id="forma_pagamento">
+            <option value="">Selecione...</option>
+            <option value="PIX">PIX</option>
+            <option value="Dinheiro">Dinheiro</option>
+            <option value="Cartão de Débito">Cartão de Débito</option>
+            <option value="Cartão de Crédito">Cartão de Crédito</option>
+        </select>
+    </label>
+
+    <h3>Itens / Serviços</h3>
+    <table class="tabela" id="tabela-itens">
+        <thead>
+            <tr>
+                <th>Descrição</th>
+                <th>Qtd</th>
+                <th>Valor Unit. (R$)</th>
+                <th>Subtotal</th>
+                <th></th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+    <button type="button" class="btn btn-secondary" onclick="adicionarItem()">+ Adicionar item</button>
+
+    <div class="total-os" style="margin-top: 20px; font-size: 1.2rem; text-align: right;">
+        <strong>Total: <span id="valor-total" style="color: #b30000;">R$ 0,00</span></strong>
+    </div>
+
+    <div class="form-actions" style="margin-top: 20px;">
+        <button type="submit" class="btn">Salvar Alterações</button>
+        <a href="/historico" class="btn btn-secondary">Cancelar</a>
+    </div>
+</form>
+
+<div id="resultado-os" style="display:none;">
+    <h3>Alterações salvas com sucesso!</h3>
+    <p>OS #<span id="os-id"></span></p>
+    <a id="link-pdf" class="btn" target="_blank">📄 Baixar PDF</a>
+    <a href="/historico" class="btn btn-secondary">Voltar ao Histórico</a>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+const ORDEM_ID = "{{ ordem_id }}";
+let itemCount = 0;
+
+// Função auxiliar para formatar os valores em Reais na tela
+function formatarMoeda(valor) {
+    return "R$ " + valor.toFixed(2).replace('.', ',');
+}
+
+function adicionarItem(item = null) {
+    itemCount++;
+    const tbody = document.querySelector('#tabela-itens tbody');
+    const tr = document.createElement('tr');
+    tr.dataset.id = itemCount;
+    tr.innerHTML = `
+        <td><input type="text" class="item-descricao" placeholder="Ex: Óleo 10W30" value="${escapeHtml(item ? item.descricao : '')}" required></td>
+        <td><input type="number" class="item-qtd" value="${item ? item.quantidade : 1}" min="1" step="any" style="width:70px"></td>
+        <td><input type="number" class="item-valor" value="${item ? item.valor_unitario : 0}" min="0" step="0.01" style="width:90px"></td>
+        <td class="item-subtotal">R$ 0,00</td>
+        <td><button type="button" class="btn-sm btn-danger" onclick="removerItem(this)">x</button></td>
+    `;
+    tbody.appendChild(tr);
+
+    // Escuta alterações de digitação tanto na quantidade quanto no valor
+    tr.querySelectorAll('.item-qtd, .item-valor').forEach(input => {
+        input.addEventListener('input', recalcularTotal);
+    });
+    recalcularTotal();
+}
+
+function removerItem(btn) {
+    btn.closest('tr').remove();
+    recalcularTotal();
+}
+
+function recalcularTotal() {
+    let total = 0;
+    document.querySelectorAll('#tabela-itens tbody tr').forEach(tr => {
+        const qtd = parseFloat(tr.querySelector('.item-qtd').value) || 0;
+        // CORRIGIDO: Retirada a aspa dupla da string do seletor '.item-valor'
+        const valor = parseFloat(tr.querySelector('.item-valor').value) || 0;
+        const subtotal = qtd * valor;
+        tr.querySelector('.item-subtotal').textContent = formatarMoeda(subtotal);
+        total += subtotal;
+    });
+    document.getElementById('valor-total').textContent = formatarMoeda(total);
+}
+
+async function carregarOrdem() {
+    const r = await fetch(`/api/ordens/${ORDEM_ID}`);
+    const ordem = await r.json();
+
+    document.getElementById('info-cliente').textContent = `Cliente: ${ordem.cliente_nome}`;
+    document.getElementById('descricao').value = ordem.descricao || '';
+    document.getElementById('status').value = ordem.status;
+    document.getElementById('forma_pagamento').value = ordem.forma_pagamento || '';
+
+    // Limpa o corpo da tabela antes de renderizar os itens retornados do banco
+    document.querySelector('#tabela-itens tbody').innerHTML = '';
+
+    if (ordem.itens && ordem.itens.length > 0) {
+        ordem.itens.forEach(item => adicionarItem(item));
+    } else {
+        adicionarItem();
+    }
+}
+
+document.getElementById('form-os').addEventListener('submit', async (e) => {
+    e.preventDefault();
+
+    const itens = [];
+    document.querySelectorAll('#tabela-itens tbody tr').forEach(tr => {
+        const descricao = tr.querySelector('.item-descricao').value;
+        const qtd = parseFloat(tr.querySelector('.item-qtd').value) || 1;
+        const valor = parseFloat(tr.querySelector('.item-valor').value) || 0;
+        if (descricao) {
+            itens.push({ descricao, quantidade: qtd, valor_unitario: valor });
+        }
+    });
+
+    const dados = {
+        descricao: document.getElementById('descricao').value,
+        status: document.getElementById('status').value,
+        forma_pagamento: document.getElementById('forma_pagamento').value,
+        itens: itens
+    };
+
+    if (!itens.length) { alert("Adicione pelo menos um item."); return; }
+
+    const r = await fetch(`/api/ordens/${ORDEM_ID}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(dados)
+    });
+
+    if (r.ok) {
+        const ordem = await r.json();
+        document.getElementById('form-os').style.display = 'none';
+        document.getElementById('resultado-os').style.display = 'block';
+        document.getElementById('os-id').textContent = ordem.id;
+        document.getElementById('link-pdf').href = `/api/ordens/${ordem.id}/pdf`;
+    } else {
+        alert('Erro ao salvar as alterações.');
+    }
+});
+
+// Inicializa o carregamento da ordem ao abrir a página
+carregarOrdem();
+</script>
+{% endblock %}

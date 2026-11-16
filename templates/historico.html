@@ -1,0 +1,291 @@
+{% extends "base.html" %}
+{% block title %}Histórico - Joanderson Moto Peças{% endblock %}
+{% block content %}
+<h1>Histórico de Ordens de Serviço</h1>
+
+<div class="filtros">
+    <label>Cliente
+        <select id="filtro-cliente">
+            <option value="">Todos os clientes</option>
+        </select>
+    </label>
+   <label>De
+    <input
+        type="text"
+        id="filtro-data-inicio"
+        placeholder="DD/MM/AAAA"
+        maxlength="10">
+    </label>
+
+    <label>Até
+    <input
+        type="text"
+        id="filtro-data-fim"
+        placeholder="DD/MM/AAAA"
+        maxlength="10">
+    </label>
+    <label>Status
+        <select id="filtro-status">
+            <option value="">Todos</option>
+            <option value="finalizada">Finalizada</option>
+            <option value="pendente">Pendente</option>
+            <option value="cancelada">Cancelada</option>
+        </select>
+    </label>
+    <button class="btn" onclick="aplicarFiltros()">Filtrar</button>
+    <button class="btn btn-secondary" onclick="limparFiltros()">Limpar</button>
+</div>
+
+<div class="resumo-filtro" id="resumo-filtro"></div>
+
+<table class="tabela">
+    <thead>
+        <tr>
+            <th>OS</th>
+            <th>Cliente</th>
+            <th>Data</th>
+            <th>Descrição</th>
+            <th>Status</th>
+            <th>Valor</th>
+            <th>Ações</th>
+        </tr>
+    </thead>
+    <tbody id="lista-ordens"></tbody>
+</table>
+{% endblock %}
+
+{% block scripts %}
+
+
+<script>
+
+    function mascaraData(campo) {
+
+    campo.addEventListener("input", () => {
+
+        let valor = campo.value.replace(/\D/g, "");
+
+        if (valor.length > 8)
+            valor = valor.slice(0, 8);
+
+        if (valor.length > 4) {
+
+            valor =
+                valor.slice(0, 2) + "/" +
+                valor.slice(2, 4) + "/" +
+                valor.slice(4);
+
+        } else if (valor.length > 2) {
+
+            valor =
+                valor.slice(0, 2) + "/" +
+                valor.slice(2);
+
+        }
+
+        campo.value = valor;
+    });
+}
+
+mascaraData(
+    document.getElementById("filtro-data-inicio")
+);
+
+mascaraData(
+    document.getElementById("filtro-data-fim")
+);
+async function carregarClientesFiltro() {
+    const r = await fetch('/api/clientes');
+    const clientes = await r.json();
+    const select = document.getElementById('filtro-cliente');
+    clientes.forEach(c => {
+        const opt = document.createElement('option');
+        opt.value = c.id;
+        opt.textContent = c.nome;
+        select.appendChild(opt);
+    });
+
+    // se veio cliente_id pela URL (link do histórico de um cliente)
+    const params = new URLSearchParams(window.location.search);
+    const clienteId = params.get('cliente_id');
+    if (clienteId) {
+        select.value = clienteId;
+    }
+}
+
+function limparFiltros() {
+    document.getElementById('filtro-cliente').value = '';
+    document.getElementById('filtro-data-inicio').value = '';
+    document.getElementById('filtro-data-fim').value = '';
+    document.getElementById('filtro-status').value = '';
+    carregarOrdens();
+}
+
+async function aplicarFiltros() {
+    carregarOrdens();
+}
+
+function converterData(data) {
+
+    if (!data)
+        return "";
+
+    const partes = data.split("/");
+
+    if (partes.length !== 3)
+        return "";
+
+    return `${partes[2]}-${partes[1]}-${partes[0]}`;
+}
+
+async function carregarOrdens() {
+
+    const params = new URLSearchParams();
+
+    const clienteId =
+        document.getElementById('filtro-cliente').value;
+
+    const dataInicioTexto =
+        document.getElementById('filtro-data-inicio').value;
+
+    const dataFimTexto =
+        document.getElementById('filtro-data-fim').value;
+
+    if (dataInicioTexto && !dataValida(dataInicioTexto)) {
+        alert("Data inicial inválida.");
+        return;
+    }
+
+    if (dataFimTexto && !dataValida(dataFimTexto)) {
+        alert("Data final inválida.");
+        return;
+    }
+
+    const dataInicio =
+        converterData(dataInicioTexto);
+
+    const dataFim =
+        converterData(dataFimTexto);
+
+    const status =
+        document.getElementById('filtro-status').value;
+
+    if (clienteId)
+        params.append('cliente_id', clienteId);
+
+    if (dataInicio)
+        params.append('data_inicio', dataInicio);
+
+    if (dataFim)
+        params.append('data_fim', dataFim);
+
+    if (status)
+        params.append('status', status);
+
+    const r =
+        await fetch(
+            `/api/ordens?${params.toString()}`
+        );
+
+    const ordens =
+        await r.json();
+
+    renderizarOrdens(ordens);
+
+    // resumo do faturamento do período filtrado
+    if (dataInicio && dataFim) {
+
+        const params2 =
+            new URLSearchParams({
+                data_inicio: dataInicio,
+                data_fim: dataFim
+            });
+
+        const r2 =
+            await fetch(
+                `/api/faturamento?${params2.toString()}`
+            );
+
+        const fat =
+            await r2.json();
+
+        document.getElementById(
+            'resumo-filtro'
+        ).innerHTML =
+            `Faturamento no período: <strong>${formatarMoeda(fat.faturamento_periodo)}</strong> (${fat.quantidade_os_periodo} OS)`;
+
+    } else {
+
+        const totalFinalizadas =
+            ordens
+                .filter(o => o.status === 'finalizada')
+                .reduce(
+                    (acc, o) => acc + o.valor_total,
+                    0
+                );
+
+        document.getElementById(
+            'resumo-filtro'
+        ).innerHTML =
+            `Total exibido: <strong>${formatarMoeda(totalFinalizadas)}</strong> (${ordens.length} OS)`;
+    }
+}
+
+function dataValida(data) {
+
+    const regex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+
+    if (!regex.test(data))
+        return false;
+
+    const partes = data.split("/");
+
+    const dia = parseInt(partes[0]);
+    const mes = parseInt(partes[1]);
+    const ano = parseInt(partes[2]);
+
+    const dt = new Date(ano, mes - 1, dia);
+
+    return (
+        dt.getFullYear() === ano &&
+        dt.getMonth() === mes - 1 &&
+        dt.getDate() === dia
+    );
+}
+
+function renderizarOrdens(ordens) {
+    const tbody = document.getElementById('lista-ordens');
+    tbody.innerHTML = '';
+    if (ordens.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="7">Nenhuma ordem de serviço encontrada.</td></tr>';
+        return;
+    }
+    ordens.forEach(o => {
+        const tr = document.createElement('tr');
+        const data = new Date(o.data).toLocaleDateString('pt-BR');
+        tr.innerHTML = `
+            <td>#${o.id}</td>
+            <td>${escapeHtml(o.cliente_nome)}</td>
+            <td>${data}</td>
+            <td>${escapeHtml(o.descricao || '-')}</td>
+            <td><span class="status status-${escapeHtml(o.status)}">${escapeHtml(o.status)}</span></td>
+            <td>${formatarMoeda(o.valor_total)}</td>
+            <td class="acoes">
+                <a class="btn-sm" href="/editar-os/${o.id}">Editar</a>
+                <a class="btn-sm" href="/api/ordens/${o.id}/pdf" target="_blank">PDF</a>
+                <button class="btn-sm btn-danger" onclick="removerOrdem(${o.id})">Excluir</button>
+            </td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+async function removerOrdem(id) {
+    if (!confirm('Tem certeza que deseja excluir esta ordem de serviço?')) return;
+    await fetch(`/api/ordens/${id}`, { method: 'DELETE' });
+    carregarOrdens();
+}
+
+carregarClientesFiltro().then(carregarOrdens);
+</script>
+{% endblock %}

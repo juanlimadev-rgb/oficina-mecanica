@@ -1,0 +1,177 @@
+{% extends "base.html" %}
+
+{% block title %}
+Financeiro
+{% endblock %}
+
+{% block content %}
+
+<h1>Financeiro</h1>
+<a href="{{ url_for('auth.logout') }}" class="btn-logout">
+    Sair
+</a>
+
+<div class="filtros">
+
+    <label>
+        Data Inicial
+        <input
+        type="text"
+        id="data_inicio"
+        placeholder="DD/MM/AAAA"
+        maxlength="10">
+    </label>
+
+    <label>
+        Data Final
+        <input
+        type="text"
+        id="data_fim"
+        placeholder="DD/MM/AAAA"
+        maxlength="10">
+    </label>
+
+    <button class="btn" onclick="buscarFinanceiro()">
+        Buscar
+    </button>
+
+</div>
+
+<h2>
+    Total do período:
+    <span id="total-periodo">
+        R$ 0,00
+    </span>
+</h2>
+
+<table class="tabela">
+
+    <thead>
+        <tr>
+            <th>Data</th>
+            <th>Cliente</th>
+            <th>Serviço</th>
+            <th>Itens</th>
+            <th>Pagamento</th>
+            <th>Valor</th>
+        </tr>
+    </thead>
+
+    <tbody id="lista-financeiro"></tbody>
+
+</table>
+
+
+{% endblock %}
+
+{% block scripts %}
+
+<script>
+
+    async function buscarFinanceiro() {
+
+    const dataInicio =
+        converterData(
+            document.getElementById("data_inicio").value
+        );
+
+    const dataFim =
+        converterData(
+            document.getElementById("data_fim").value
+        );
+
+    const resposta =
+        await fetch(
+            `/api/financeiro?data_inicio=${dataInicio}&data_fim=${dataFim}`
+        );
+
+    const ordens =
+        await resposta.json();
+
+    const tbody =
+        document.getElementById(
+            "lista-financeiro"
+        );
+
+    tbody.innerHTML = "";
+
+    let total = 0;
+
+    ordens.forEach(os => {
+
+        total += os.valor;
+
+        const tr =
+            document.createElement("tr");
+
+        tr.innerHTML = `
+            <td>${escapeHtml(os.data)}</td>
+            <td>${escapeHtml(os.cliente)}</td>
+            <td>${escapeHtml(os.descricao)}</td>
+            <td>${escapeHtml(os.itens.join(", "))}</td>
+            <td>${escapeHtml(os.pagamento || "-")}</td>
+            <td>R$ ${os.valor.toFixed(2)}</td>
+        `;
+
+        tbody.appendChild(tr);
+    });
+
+    document.getElementById(
+        "total-periodo"
+    ).innerText =
+        `R$ ${total.toFixed(2)}`;
+}
+
+function converterData(dataBR) {
+
+    if (!dataBR)
+        return "";
+
+    const partes =
+        dataBR.split("/");
+
+    if (partes.length !== 3)
+        return "";
+
+    return `${partes[2]}-${partes[1]}-${partes[0]}`;
+}
+
+function mascaraData(campo) {
+
+    campo.addEventListener("input", () => {
+
+        let valor = campo.value.replace(/\D/g, "");
+
+        if (valor.length > 8)
+            valor = valor.slice(0, 8);
+
+        if (valor.length > 4) {
+
+            valor =
+                valor.slice(0, 2) + "/" +
+                valor.slice(2, 4) + "/" +
+                valor.slice(4);
+
+        } else if (valor.length > 2) {
+
+            valor =
+                valor.slice(0, 2) + "/" +
+                valor.slice(2);
+
+        }
+
+        campo.value = valor;
+    });
+}
+
+mascaraData(
+    document.getElementById("data_inicio")
+);
+
+mascaraData(
+    document.getElementById("data_fim")
+);
+
+</script>
+
+{% endblock %}
